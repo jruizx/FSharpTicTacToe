@@ -26,17 +26,25 @@ If all nine squares are filled and neither player has three in a row, the game i
         type Movement = {player: Player; location: Location}
         type Movements = Movement list
 
+        type Status = InvalidPlayer | InvalidPlayerAndMove | InvalidMove | Accepted
+
+        type PlayResult = Movements * Status
+
         let moveExists movements movement =
             movements |> List.exists (fun m -> m.location = movement.location )
+        
         let isPlayerSameAsLast movements movement =
-            (movements |> List.last).player  <> movement.player
+            (movements |> List.last).player = movement.player
+
         let play (movement:Movement) (movements:Movements) =
             match movement, movements with
-            | {player = O}, [] -> false
-            | {player = X}, [] -> true
-            | m, ms -> isPlayerSameAsLast ms m && not (moveExists ms m )
-
-
+            | {player = O}, [] -> (movements, InvalidPlayer)
+            | {player = X}, [] -> ([movement], Accepted)
+            | m, ms -> match (isPlayerSameAsLast ms m, moveExists ms m ) with
+                       | true, true -> (movements, InvalidPlayerAndMove)
+                       | true, _ -> (movements, InvalidPlayer)
+                       | _, true -> (movements, InvalidMove)
+                       | _, _ -> (movements @ [movement], Accepted)
 
 
     module TicTacToeTests =
@@ -47,27 +55,40 @@ If all nine squares are filled and neither player has three in a row, the game i
 
         [<Test>]
         let ``First player cannot be O`` () =
-             (play {player = O; location = {x = One; y = One }} []) =! false
+             snd (play {player = O; location = {x = One; y = One }} []) =! InvalidPlayer
 
         [<Test>]
         let ``First player must be X`` () =
-             (play {player = X; location = {x = One; y = One }} []) =! true
+             let movement = {player = X; location = {x = One; y = One }}
+             (play movement []) =! ([movement],Accepted)
 
         [<Test>]
         let  ``X cannot play twice in a row`` () =
-             let movements = [{player = X; location = {x= One; y = Two}}]
              let movement = {player = X; location = {x = One; y = One }}
-             (play  movement movements ) =! false
+             let movement2 = {player = X; location = {x = One; y = Two }}
+             snd (
+                 []
+                 |> play  movement
+                 |> fst 
+                 |> play movement2) =! InvalidPlayer
 
         [<Test>]
         let ``O can play after X`` () =
-            let movements = [{player = X; location = {x= One; y = One}}]
-            let movement = {player = O; location = {x = One; y = Two }}
-            (play  movement movements ) =! true
+            let movement = {player = X; location = {x = One; y = One }}
+            let movement2 = {player = O; location = {x = One; y = Two }}
+              
+            []
+            |> play  movement
+            |> fst 
+            |> play movement2 =! ([movement; movement2],Accepted)
+            
 
         [<Test>]
         let ``A player can't play in a previous played position`` () =
-            let firstMovement = {player = X; location = {x= One; y = One}}
-            let movements = [firstMovement]
-            let movement = {player = O; location = {x = One; y = One }}
-            (play  movement movements ) =! false
+            let movement = {player = X; location = {x = One; y = One }}
+            let movement2 = {player = O; location = {x = One; y = One }}
+              
+            []
+            |> play  movement
+            |> fst 
+            |> play movement2 =! ([movement], InvalidMove)
